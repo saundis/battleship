@@ -77,25 +77,28 @@ describe('Board testing', () => {
             expect(board[y][x].ship).toBe(ship);
 
             expect(ship.orientation).not.toBeNull();
+            expect(ship.orientation).not.toBeUndefined();
             const direction = ship.orientation;
 
             // endPosition
             let [newX, newY] = [x, y];
 
             for (let i = 0; i < ship.length; i++) {
-                switch (direction) {
-                    case 'up':
-                        newY -= 1;
-                        break;
-                    case 'down':
-                        newY += 1;
-                        break;
-                    case 'left':
-                        newX -= 1;
-                        break;
-                    case 'right':
-                        newX += 1;
-                        break;
+                if (i > 0) {
+                    switch (direction) {
+                        case 'up':
+                            newY -= 1;
+                            break;
+                        case 'down':
+                            newY += 1;
+                            break;
+                        case 'left':
+                            newX -= 1;
+                            break;
+                        case 'right':
+                            newX += 1;
+                            break;
+                    }
                 }
                 expect(newX).toBeGreaterThanOrEqual(0);
                 expect(newX).toBeLessThan(board[0].length);
@@ -137,6 +140,48 @@ describe('Board testing', () => {
 
         let ships = [ship1, ship2, ship3];
         expect(game.areAllSunk(ships)).toBe(true);
+    });
+
+    it('should clear the board', () => {
+        let game = gameboard();
+        let ships = [
+            new Ship(1),
+            new Ship(2),
+            new Ship(3),
+            new Ship(4),
+            new Ship(5),
+        ];
+        let board = [];
+
+        for (let ship of ships) {
+            ship.orientation = 'up';
+            ship.start = [1, 1];
+            ship.hits.push([0, 1]);
+        }
+
+        for (let i = 0; i < ROWS; i++) {
+            const newRow = [];
+            for (let j = 0; j < COLUMNS; j++) {
+                const cell = new Cell();
+                cell.hit = true;
+                newRow.push(cell);
+            }
+            board.push(newRow);
+        }
+
+        game.clearBoard(ships, board);
+
+        for (let i = 0; i < ROWS; i++) {
+            for (let j = 0; j < COLUMNS; j++) {
+                expect(board[i][j].hit).toBe(false);
+            }
+        }
+
+        for (let ship of ships) {
+            expect(ship.orientation).toBeNull();
+            expect(ship.start).toBeNull();
+            expect(ship.hits).toHaveLength(0);
+        }
     });
 });
 
@@ -208,15 +253,14 @@ describe('Computer testing', () => {
         }
 
         const mockFinal = jest.fn().mockReturnValue(true);
-        player.receiveHit = mockFinal;
-        computer.gameboard.getBoard = jest.fn().mockReturnValue(board);
+        player.gameboard.receiveHit = mockFinal;
+        player.gameboard.getBoard = jest.fn().mockReturnValue(board);
 
         computer.doNextMove(player);
 
         jest.advanceTimersByTime(2000);
 
         // figure out what to expect and what the board should be
-        console.log(mockFinal.mock.calls);
         expect(mockFinal.mock.calls).toHaveLength(1);
     });
 });

@@ -1,3 +1,10 @@
+import {
+    playerTurn,
+    computerTurn,
+    computerCellHit,
+    winSequence,
+} from './DOM-stuff.js';
+
 class Ship {
     constructor(length) {
         this.length = length;
@@ -18,6 +25,10 @@ class Ship {
         this._orientation = direction;
     }
 
+    get orientation() {
+        return this._orientation;
+    }
+
     hit(coordinates) {
         if (this.hits.length >= this.length) {
             return new Error('Ship already sunken');
@@ -36,6 +47,12 @@ class Ship {
     isSunk() {
         return this.hits.length >= this.length;
     }
+
+    clear() {
+        this._start = null;
+        this._orientation = null;
+        this.hits = [];
+    }
 }
 
 class Cell {
@@ -47,10 +64,6 @@ class Cell {
     clear() {
         this.ship = null;
         this.hit = false;
-    }
-
-    hit() {
-        this.hit = true;
     }
 }
 
@@ -78,13 +91,17 @@ class Computer extends Player {
     }
 
     doNextMove(player) {
-        const randomTime = Math.floor(Math.random() * 1000) + 1000;
+        const randomTime = Math.floor(Math.random() * 750) + 500;
 
         setTimeout(() => {
-            const coordinates = this.getNextMove(this.gameboard.getBoard());
-            const plr = controller.getOtherPlayer(this, player, this);
+            const coordinates = this.getNextMove(player.gameboard.getBoard());
 
-            plr.receiveHit(coordinates);
+            if (player.gameboard.receiveHit(coordinates) === 'sunk') {
+                computerCellHit(coordinates, true);
+            } else {
+                computerCellHit(coordinates, false);
+            }
+            controller.endOfMove();
         }, randomTime);
     }
 }
@@ -112,6 +129,40 @@ const gameboard = function () {
         const newShip = new Ship(SHIPS[i]);
         ships.push(newShip);
     }
+
+    const getAllShipCells = (cell, board) => {
+        let [x, y] = cell;
+        if (!board[y][x].ship) {
+            return null;
+        }
+        const ship = board[y][x].ship;
+        [x, y] = ship.start;
+        let cellsArray = [];
+
+        if (!ship.start || !ship.orientation) {
+            return [];
+        }
+
+        for (let i = 0; i < ship.length; i++) {
+            let [newX, newY] = [x, y];
+            switch (ship.orientation) {
+                case 'up':
+                    newY -= i;
+                    break;
+                case 'down':
+                    newY += i;
+                    break;
+                case 'left':
+                    newX -= i;
+                    break;
+                case 'right':
+                    newX += i;
+                    break;
+            }
+            cellsArray.push([newX, newY]);
+        }
+        return cellsArray;
+    };
 
     // Returns all cells that the ship is going to be placed in from start position (in order from start to end)
     const getAllPotentialShipCells = (length, direction, board) => {
@@ -143,22 +194,25 @@ const gameboard = function () {
                         break;
                 }
                 if (
-                    y > ROWS ||
-                    y < 0 ||
-                    x > COLUMNS ||
-                    x < 0 ||
-                    board[y][x].ship
+                    newY >= ROWS ||
+                    newY < 0 ||
+                    newX >= COLUMNS ||
+                    newX < 0 ||
+                    board[newY][newX].ship
                 ) {
                     cellsArray = [];
                     continue;
                 }
-                cellsArray.push(board[y][x]);
+                cellsArray.push(board[newY][newX]);
             }
         } while (cellsArray.length === 0);
         return { x, y, cellsArray };
     };
 
     const randomizeShips = (ships, board) => {
+        if (controller.getGameStarted()) {
+            return;
+        }
         ships.forEach((ship) => {
             const direction = ORIENTATIONS[Math.floor(Math.random() * 4)];
             const shipCells = getAllPotentialShipCells(
@@ -174,17 +228,35 @@ const gameboard = function () {
         });
     };
 
+    const clearBoard = (ships, board) => {
+        if (controller.getGameStarted()) {
+            return;
+        }
+        ships.forEach((ship) => {
+            ship.clear();
+        });
+
+        board.forEach((row) =>
+            row.forEach((cell) => {
+                cell.clear();
+            })
+        );
+    };
+
     // Returns true if hit was a ship
     const receiveHit = (coordinates) => {
         const [x, y] = coordinates;
         const cell = board[y][x];
-        cell.hit();
+        cell.hit = true;
 
         if (cell.ship) {
             cell.ship.hit(coordinates);
-            return true;
+            if (cell.ship.isSunk()) {
+                return 'sunk';
+            }
+            return 'ship';
         }
-        return false;
+        return 'hit';
     };
 
     const areAllSunk = (ships) => {
@@ -210,13 +282,16 @@ const gameboard = function () {
         areAllSunk,
         getBoard,
         getShips,
+        clearBoard,
+        getAllShipCells,
     };
 };
 
 const controller = (() => {
     const player = new Player();
     const computer = new Computer();
-    const currentPlayer = null;
+    let currentPlayer = null;
+    let gameStarted = false;
 
     const checkForWin = (currentPlayer, player, computer) => {
         let otherPlayer = getOtherPlayer(currentPlayer, player, computer);
@@ -229,14 +304,34 @@ const controller = (() => {
     // Occurs when player presses play
     const endOfMove = () => {
         if (checkForWin(currentPlayer, player, computer)) {
-            // game over, do anything needed for winning sequence
-            return true;
+            gameStarted = false;
+            winSequence(currentPlayer);
+            return;
         }
         currentPlayer = getOtherPlayer(currentPlayer, player, computer);
         if (currentPlayer === computer) {
+            computerTurn();
             computer.doNextMove(player);
+        } else {
+            playerTurn();
         }
-        return false;
+    };
+
+    const startGame = () => {
+        computer.gameboard.clearBoard(
+            computer.gameboard.getShips(),
+            computer.gameboard.getBoard()
+        );
+        computer.gameboard.randomizeShips(
+            computer.gameboard.getShips(),
+            computer.gameboard.getBoard()
+        );
+        gameStarted = true;
+        currentPlayer = player;
+    };
+
+    const getGameStarted = () => {
+        return gameStarted;
     };
 
     const getCurrentPlayer = () => {
@@ -247,11 +342,24 @@ const controller = (() => {
         return !plr || plr === computer ? player : computer;
     };
 
-    return { endOfMove, checkForWin, getCurrentPlayer, getOtherPlayer };
+    const getPlayer = () => {
+        return player;
+    };
+
+    const getComputer = () => {
+        return computer;
+    };
+
+    return {
+        endOfMove,
+        checkForWin,
+        getCurrentPlayer,
+        getOtherPlayer,
+        getPlayer,
+        getComputer,
+        startGame,
+        getGameStarted,
+    };
 })();
 
 export { Ship, Cell, gameboard, controller, Player, Computer };
-
-// Basic DOM setup
-
-// have a button to randomize the board and to play the game

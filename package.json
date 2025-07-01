@@ -17,12 +17,16 @@
     "bugs": {
         "url": "https://github.com/saundis/battleship/issues"
     },
+    "jest": {
+        "testEnvironment": "jsdom"
+    },
     "homepage": "https://github.com/saundis/battleship#readme",
     "devDependencies": {
         "@babel/cli": "^7.27.2",
         "@babel/core": "^7.27.7",
         "@babel/preset-env": "^7.27.2",
         "babel-jest": "^30.0.2",
-        "jest": "^30.0.3"
+        "jest": "^30.0.3",
+        "jest-environment-jsdom": "^30.0.2"
     }
 }
